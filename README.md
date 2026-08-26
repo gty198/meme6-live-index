@@ -2,6 +2,8 @@
 
 一个单文件静态网页，用于展示 MEME6 加权实时指数和成分币行情图表。
 
+![MEME6 实时指数预览](assets/meme6-preview.jpg)
+
 ## 功能
 
 - 实时获取 Binance Vision K 线数据
