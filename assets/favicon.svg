@@ -1,6 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="MEME6 Index">
   <rect width="64" height="64" rx="16" fill="#f1dc54"/>
-  <path d="M8 47V17h8l8 13 8-13h8v30h-8V30l-8 13-8-13v17z" fill="#10120c"/>
-  <path d="M49 20a13 13 0 1 0 0 24" fill="none" stroke="#10120c" stroke-width="7" stroke-linecap="round"/>
-  <text x="48" y="45" fill="#10120c" font-family="Arial, sans-serif" font-size="22" font-weight="900" text-anchor="middle">6</text>
+  <rect x="3" y="3" width="58" height="58" rx="13" fill="none" stroke="#10120c" stroke-opacity=".18" stroke-width="2"/>
+  <text x="32" y="42" fill="#10120c" font-family="Arial Black, Arial, sans-serif" font-size="30" font-weight="900" letter-spacing="-3" text-anchor="middle">M6</text>
 </svg>

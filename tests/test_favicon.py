@@ -16,6 +16,8 @@ class FaviconContractTests(unittest.TestCase):
         source = icon.read_text(encoding="utf-8")
         self.assertIn('<svg', source)
         self.assertIn('aria-label="MEME6 Index"', source)
+        self.assertIn('>M6</text>', source)
+        self.assertNotIn('<path', source)
         self.assertIn('viewBox="0 0 64 64"', source)
 
 
