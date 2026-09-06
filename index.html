@@ -122,9 +122,9 @@
       <div class="coins" id="coins"></div>
       <div class="method">
         <h3>计算方法</h3>
-        <p>以当前所选区间首根 K 线为 100 基点，对六个 USDT 交易对进行等权几何合成。实时 K 线来自 Binance Vision 公共行情流，仅供信息展示，不构成投资建议。</p>
+        <p>以 2026-08-26 00:00 UTC 为固定基期 100，对六个 USDT 交易对进行等权几何合成。切换 K 线周期仅改变图表粒度，不改变当前指数口径。实时行情来自 Binance Vision 公共行情流，仅供信息展示，不构成投资建议。</p>
       </div>
-      <div class="meta"><div><small>基点</small><strong>100.0000</strong></div><div><small>再平衡</small><strong>动态等权</strong></div><div><small>数据源</small><strong>Binance Vision</strong></div><div><small>时区</small><strong>本地时间</strong></div></div>
+      <div class="meta"><div><small>基期</small><strong>2026-08-26 UTC</strong></div><div><small>再平衡</small><strong>动态等权</strong></div><div><small>数据源</small><strong>Binance Vision</strong></div><div><small>时区</small><strong>UTC 基期</strong></div></div>
     </aside>
   </main>
 </div>
@@ -137,9 +137,16 @@
     { symbol:'FLOKI', pair:'FLOKIUSDT' }, { symbol:'WIF', pair:'WIFUSDT' }
   ];
   const labels = { '1m':'1 分钟', '5m':'5 分钟', '15m':'15 分钟', '1h':'1 小时', '4h':'4 小时', '8h':'8 小时', '1d':'日线', '1w':'周线' };
+  // This immutable UTC base keeps the headline and every chart interval on one index scale.
+  const INDEX_BASE_UTC = '2026-08-26T00:00:00Z';
+  const INDEX_BASE_MS = Date.parse(INDEX_BASE_UTC);
+  const INDEX_BASES = new Map([
+    ['DOGEUSDT',0.08570000], ['SHIBUSDT',0.00000526], ['PEPEUSDT',0.00000381],
+    ['BONKUSDT',0.00000299], ['FLOKIUSDT',0.00002617], ['WIFUSDT',0.19510000]
+  ]);
   const MA_CONFIG = [{period:5,color:'#f1dc54'},{period:10,color:'#58c8ff'},{period:19,color:'#d48aff'},{period:60,color:'#ff9f5a'}];
   const RSI_CONFIG = [{period:6,color:'#f1dc54'},{period:12,color:'#58c8ff'},{period:24,color:'#d48aff'}];
-  const state = { interval:'1d', raw:new Map(), candles:[], bases:new Map(), ws:null, hover:-1, hoverY:-1, panOffset:0, zoom:1, dragging:false, dragStartX:0, dragStartOffset:0, loading:false };
+  const state = { interval:'1d', raw:new Map(), candles:[], livePrices:new Map(), candlesWs:null, liveWs:null, hover:-1, hoverY:-1, panOffset:0, zoom:1, dragging:false, dragStartX:0, dragStartOffset:0, loading:false };
   const $ = id => document.getElementById(id);
   const canvas = $('chart'), ctx = canvas.getContext('2d');
   const colors = getComputedStyle(document.documentElement);
@@ -153,12 +160,17 @@
   function setStatus(type, text) { $('statusDot').className = 'dot ' + type; $('statusText').textContent = text; }
   function setLoading(on, text='正在合成实时指数…') { state.loading=on; $('loading').hidden=!on; $('loadingText').textContent=text; }
 
+  const indexFromPrices = prices => {
+    if (prices.length !== ASSETS.length || prices.some(p=>!Number.isFinite(p) || p<=0)) return NaN;
+    return 100 * Math.exp(prices.reduce((sum,price,i)=>sum+Math.log(price/INDEX_BASES.get(ASSETS[i].pair)),0)/prices.length);
+  };
+
   function renderCoins() {
     $('coins').innerHTML = ASSETS.map(a => {
-      const rows = state.raw.get(a.pair), last = rows && rows[rows.length-1];
-      const first = rows && rows[0];
-      const change = last && first ? (last.c / first.c - 1) * 100 : NaN;
-      return `<div class="coin"><div class="coin-main"><div class="coin-badge">${a.symbol.slice(0,2)}</div><div class="coin-name"><strong>${a.symbol}</strong><small>${a.pair}</small></div></div><div class="coin-data"><strong>${last ? fmtPrice(last.c) : '—'}</strong><small class="${change >= 0 ? 'up':'down'}">${Number.isFinite(change) ? (change>=0?'+':'')+change.toFixed(2)+'%' : '—'}</small></div></div>`;
+      const last = state.livePrices.get(a.pair) ?? state.raw.get(a.pair)?.at(-1)?.c;
+      const base = INDEX_BASES.get(a.pair);
+      const change = Number.isFinite(last) ? (last / base - 1) * 100 : NaN;
+      return `<div class="coin"><div class="coin-main"><div class="coin-badge">${a.symbol.slice(0,2)}</div><div class="coin-name"><strong>${a.symbol}</strong><small>${a.pair}</small></div></div><div class="coin-data"><strong>${last ? fmtPrice(last) : '—'}</strong><small class="${change >= 0 ? 'up':'down'}">${Number.isFinite(change) ? (change>=0?'+':'')+change.toFixed(2)+'%' : '—'}</small></div></div>`;
     }).join('');
   }
 
@@ -167,27 +179,25 @@
     const maps = ASSETS.map(a => new Map(state.raw.get(a.pair).map(k => [k.t,k])));
     const common = [...maps[0].keys()].filter(t => maps.every(m => m.has(t))).sort((a,b)=>a-b);
     if (!common.length) return;
-    state.bases.clear();
-    ASSETS.forEach((a,i) => state.bases.set(a.pair, maps[i].get(common[0]).c));
-    const geo = vals => 100 * Math.exp(vals.reduce((s,v)=>s+Math.log(v),0)/vals.length);
     state.candles = common.map(t => {
       const bars = maps.map(m=>m.get(t));
-      const rel = key => bars.map((b,i)=>b[key]/state.bases.get(ASSETS[i].pair));
-      return { t, o:geo(rel('o')), h:geo(rel('h')), l:geo(rel('l')), c:geo(rel('c')), v:bars.reduce((sum,b)=>sum+(b.v||0),0) };
+      const value = key => indexFromPrices(bars.map(b=>b[key]));
+      return { t, o:value('o'), h:value('h'), l:value('l'), c:value('c'), v:bars.reduce((sum,b)=>sum+(b.v||0),0) };
     });
-    updateHeadline(); renderCoins(); draw();
+    renderCoins(); draw();
   }
 
   function updateHeadline() {
-    const c=state.candles, last=c[c.length-1], first=c[0]; if(!last) return;
-    const change=(last.c/first.c-1)*100;
-    $('indexPrice').textContent=last.c.toFixed(4);
+    const prices=ASSETS.map(a=>state.livePrices.get(a.pair));
+    const index=indexFromPrices(prices); if(!Number.isFinite(index)) return;
+    const change=(index/100-1)*100;
+    $('indexPrice').textContent=index.toFixed(4);
     $('indexChange').textContent=`${change>=0?'+':''}${change.toFixed(2)}%`;
     $('indexChange').className='change '+(change>=0?'up':'down');
   }
 
   async function load(interval=state.interval) {
-    if (state.ws) { state.ws.onclose=null; state.ws.close(); state.ws=null; }
+    if (state.candlesWs) { state.candlesWs.onclose=null; state.candlesWs.close(); state.candlesWs=null; }
     state.interval=interval; state.raw.clear(); state.candles=[]; state.hover=-1; state.hoverY=-1; state.panOffset=0;
     $('intervalLabel').textContent=labels[interval]; setLoading(true); setStatus('', '载入历史行情'); draw();
     try {
@@ -198,15 +208,15 @@
         if (!Array.isArray(json)) throw new Error(`${a.symbol} 行情接口返回异常：${json?.msg || '不是K线数组'}`);
         return [a.pair,json.map(k=>({t:+k[0],o:+k[1],h:+k[2],l:+k[3],c:+k[4],v:+k[7]}))];
       }));
-      results.forEach(([p,k])=>state.raw.set(p,k)); aggregate(); setLoading(false); connect();
+      results.forEach(([p,k])=>state.raw.set(p,k)); aggregate(); setLoading(false); connectCandles();
     } catch(e) {
       console.error(e); setLoading(true, '行情载入失败，请检查网络后刷新'); setStatus('error','连接失败');
     }
   }
 
-  function connect() {
+  function connectCandles() {
     const streams=ASSETS.map(a=>`${a.pair.toLowerCase()}@kline_${state.interval}`).join('/');
-    const ws=new WebSocket(`wss://data-stream.binance.vision/stream?streams=${streams}`); state.ws=ws;
+    const ws=new WebSocket(`wss://data-stream.binance.vision/stream?streams=${streams}`); state.candlesWs=ws;
     ws.onopen=()=>setStatus('live','实时更新中');
     ws.onmessage=e=>{
       const msg=JSON.parse(e.data), k=msg.data?.k; if(!k) return;
@@ -216,7 +226,27 @@
       aggregate();
     };
     ws.onerror=()=>setStatus('error','行情流异常');
-    ws.onclose=()=>{ if(state.ws===ws){ setStatus('','正在重连'); setTimeout(connect,1800); } };
+    ws.onclose=()=>{ if(state.candlesWs===ws){ setStatus('','正在重连'); setTimeout(connectCandles,1800); } };
+  }
+
+  async function loadLivePrices() {
+    const symbols=encodeURIComponent(JSON.stringify(ASSETS.map(a=>a.pair)));
+    const r=await fetch(`https://data-api.binance.vision/api/v3/ticker/price?symbols=${symbols}`);
+    if (!r.ok) throw new Error(`实时价格 HTTP ${r.status}`);
+    const quotes=await r.json();
+    if (!Array.isArray(quotes)) throw new Error('实时价格接口返回异常');
+    quotes.forEach(q=>state.livePrices.set(q.symbol,+q.price));
+    updateHeadline(); renderCoins();
+  }
+
+  function connectLivePrices() {
+    const streams=ASSETS.map(a=>`${a.pair.toLowerCase()}@miniTicker`).join('/');
+    const ws=new WebSocket(`wss://data-stream.binance.vision/stream?streams=${streams}`); state.liveWs=ws;
+    ws.onmessage=e=>{
+      const quote=JSON.parse(e.data).data; if(!quote?.s || !quote?.c) return;
+      state.livePrices.set(quote.s,+quote.c); updateHeadline(); renderCoins();
+    };
+    ws.onclose=()=>{ if(state.liveWs===ws) setTimeout(connectLivePrices,1800); };
   }
 
   function sizeCanvas() {
@@ -317,7 +347,10 @@
   canvas.addEventListener('dblclick',()=>{state.panOffset=0;draw();});
   document.querySelectorAll('.range button').forEach(b=>b.addEventListener('click',()=>{if(b.dataset.interval===state.interval)return;document.querySelector('.range .active').classList.remove('active');b.classList.add('active');load(b.dataset.interval);}));
   window.addEventListener('resize',draw); new ResizeObserver(draw).observe($('chartWrap'));
-  renderCoins(); load();
+  renderCoins();
+  loadLivePrices().catch(e=>console.error('实时价格初始化失败',e));
+  connectLivePrices();
+  load();
 })();
 </script>
 </body>
