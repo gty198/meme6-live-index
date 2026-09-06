@@ -67,7 +67,7 @@
     .coins { display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
     .coin { display: grid; grid-template-columns: 1fr auto; gap: 10px; padding: 12px; background: var(--panel-2); }
     .coin-main { display: flex; align-items: center; gap: 9px; }
-    .coin-badge { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: #23282d; color: var(--accent); font-size: 9px; font-weight: 900; }
+    .coin-logo { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; display: block; background: #23282d; box-shadow: 0 0 0 1px rgba(255,255,255,.08); }
     .coin-name strong { display: block; font-size: 12px; }
     .coin-name small, .coin-data small { color: var(--muted); font-size: 10px; }
     .coin-data { text-align: right; }
@@ -132,9 +132,9 @@
 (() => {
   'use strict';
   const ASSETS = [
-    { symbol:'DOGE', pair:'DOGEUSDT' }, { symbol:'SHIB', pair:'SHIBUSDT' },
-    { symbol:'PEPE', pair:'PEPEUSDT' }, { symbol:'BONK', pair:'BONKUSDT' },
-    { symbol:'FLOKI', pair:'FLOKIUSDT' }, { symbol:'WIF', pair:'WIFUSDT' }
+    { symbol:'DOGE', pair:'DOGEUSDT', logo:'assets/logos/doge.png' }, { symbol:'SHIB', pair:'SHIBUSDT', logo:'assets/logos/shib.png' },
+    { symbol:'PEPE', pair:'PEPEUSDT', logo:'assets/logos/pepe.png' }, { symbol:'BONK', pair:'BONKUSDT', logo:'assets/logos/bonk.png' },
+    { symbol:'FLOKI', pair:'FLOKIUSDT', logo:'assets/logos/floki.png' }, { symbol:'WIF', pair:'WIFUSDT', logo:'assets/logos/wif.png' }
   ];
   const labels = { '1m':'1 分钟', '5m':'5 分钟', '15m':'15 分钟', '1h':'1 小时', '4h':'4 小时', '8h':'8 小时', '1d':'日线', '1w':'周线' };
   // This immutable UTC base keeps the headline and every chart interval on one index scale.
@@ -170,7 +170,7 @@
       const last = state.livePrices.get(a.pair) ?? state.raw.get(a.pair)?.at(-1)?.c;
       const base = INDEX_BASES.get(a.pair);
       const change = Number.isFinite(last) ? (last / base - 1) * 100 : NaN;
-      return `<div class="coin"><div class="coin-main"><div class="coin-badge">${a.symbol.slice(0,2)}</div><div class="coin-name"><strong>${a.symbol}</strong><small>${a.pair}</small></div></div><div class="coin-data"><strong>${last ? fmtPrice(last) : '—'}</strong><small class="${change >= 0 ? 'up':'down'}">${Number.isFinite(change) ? (change>=0?'+':'')+change.toFixed(2)+'%' : '—'}</small></div></div>`;
+      return `<div class="coin"><div class="coin-main"><img class="coin-logo" src="${a.logo}" alt="${a.symbol} logo" width="28" height="28"><div class="coin-name"><strong>${a.symbol}</strong><small>${a.pair}</small></div></div><div class="coin-data"><strong>${last ? fmtPrice(last) : '—'}</strong><small class="${change >= 0 ? 'up':'down'}">${Number.isFinite(change) ? (change>=0?'+':'')+change.toFixed(2)+'%' : '—'}</small></div></div>`;
     }).join('');
   }
 
