@@ -20,6 +20,10 @@ class FaviconContractTests(unittest.TestCase):
         self.assertEqual(int.from_bytes(header[16:20], "big"), 512)
         self.assertEqual(int.from_bytes(header[20:24], "big"), 512)
 
+    def test_header_logo_uses_the_same_png_brand_image(self):
+        self.assertIn('<img class="mark" src="assets/favicon.png"', HTML)
+        self.assertNotIn('<div class="mark">M6</div>', HTML)
+
 
 if __name__ == "__main__":
     unittest.main()
