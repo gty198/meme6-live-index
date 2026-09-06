@@ -7,18 +7,18 @@ HTML = (ROOT / "index.html").read_text(encoding="utf-8")
 
 
 class FaviconContractTests(unittest.TestCase):
-    def test_page_declares_a_local_svg_favicon(self):
-        self.assertIn('<link rel="icon" type="image/svg+xml" href="assets/favicon.svg"', HTML)
+    def test_page_declares_the_user_supplied_png_favicon(self):
+        self.assertIn('<link rel="icon" type="image/png" href="assets/favicon.png"', HTML)
+        self.assertNotIn('assets/favicon.svg', HTML)
 
-    def test_favicon_is_a_valid_meme6_svg_asset(self):
-        icon = ROOT / "assets" / "favicon.svg"
+    def test_png_favicon_is_a_square_brand_image(self):
+        icon = ROOT / "assets" / "favicon.png"
         self.assertTrue(icon.is_file())
-        source = icon.read_text(encoding="utf-8")
-        self.assertIn('<svg', source)
-        self.assertIn('aria-label="MEME6 Index"', source)
-        self.assertIn('>M6</text>', source)
-        self.assertNotIn('<path', source)
-        self.assertIn('viewBox="0 0 64 64"', source)
+        self.assertGreater(icon.stat().st_size, 10_000)
+        header = icon.read_bytes()[:24]
+        self.assertEqual(header[:8], b"\x89PNG\r\n\x1a\n")
+        self.assertEqual(int.from_bytes(header[16:20], "big"), 512)
+        self.assertEqual(int.from_bytes(header[20:24], "big"), 512)
 
 
 if __name__ == "__main__":
